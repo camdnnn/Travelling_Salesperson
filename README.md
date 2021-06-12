@@ -15,8 +15,7 @@ Space - Generates a new set random set of circles equal to in number to the numb
 
 2 - Orders the circles based on the nearest circle
 
-3 - Goes through the first 1 million permutations
+3 - Goes through all possible permutations (will not do anything if there are 10 or more circles but that can be changed by changing MAX_SIZE variable)
 
-0 - Goes through all possible permutations (will not do anything if there are 10 or more circles but that can be changed by changing MAX_SIZE variable)
+0 - Goes through the clustering order
 
-Left Shift - If held while pressing one of the number keys specified it will do the clustering method previously described while using the function of the number key pressed
