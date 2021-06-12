@@ -16,7 +16,7 @@ RADIUS = HEIGHT // 45
 LINE_WIDTH = RADIUS // 2
 
 # number of circles
-COUNT = 0
+COUNT = 36
 MAX_SIZE = 9
 
 # colors that can be used
@@ -55,47 +55,31 @@ def main():
             if event.type == pygame.QUIT:
                 run = False
             elif event.type == pygame.KEYDOWN:
-                # holds if left shift is held down
-                l_shift_held = pygame.key.get_pressed()[pygame.K_LSHIFT]
 
                 # holds the circles returned by the ordering function
                 ord_circles = None
 
-                # resets the colors if left shift is not the button pressed
-                if event.key != pygame.K_LSHIFT:
-                    circles.reset_colors()
+                # holds the count of circles
                 count = len(circles.get_circles())
 
                 # if the desired key is pressed than the desired function is ran
-                # if applicable if left shift is held then the cluster order version is ran instead
                 # SPACE - Generate Circles
                 # 1 - Random Order
                 # 2 - Closest Order
-                # 3 - Value Cutoff Order
-                # 0 - Optimal Order
+                # 3 - Optimal Order
+                # 0 - Cluster Order
                 if event.key == pygame.K_SPACE:
                     circles.generate_circles()
                     draw_window(circles)
                 elif event.key == pygame.K_1:
-                    if l_shift_held and count >= 2:
-                        ord_circles = cluster_order(circles.get_circles(), random_order)
-                    else:
-                        ord_circles = random_order(circles.get_circles())
+                    ord_circles = random_order(circles.get_circles())
                 elif event.key == pygame.K_2:
-                    if l_shift_held and count >= 2:
-                        ord_circles = cluster_order(circles.get_circles(), closest_order)
-                    else:
-                        ord_circles = closest_order(circles.get_circles())
+                    ord_circles = closest_order(circles.get_circles())
                 elif event.key == pygame.K_3:
-                    if l_shift_held and count >= 2:
-                        ord_circles = cluster_order(circles.get_circles(), value_cutoff_optimal_order)
-                    else:
-                        ord_circles = value_cutoff_optimal_order(circles.get_circles())
-                elif event.key == pygame.K_0:
-                    if l_shift_held and count >= 2:
-                        ord_circles = cluster_order(circles.get_circles(), optimal_order, MAX_SIZE)
-                    elif count <= MAX_SIZE:
+                    if count <= MAX_SIZE:
                         ord_circles = optimal_order(circles.get_circles())
+                elif event.key == pygame.K_0:
+                    ord_circles = cluster_order(circles.get_circles(), MAX_SIZE)
 
                 # ord circles holds the circles returned by a function
                 # if none of them ran then that means the circles are the same
@@ -104,6 +88,7 @@ def main():
                     circles.set_circles(ord_circles)
                     draw_window(circles)
 
+            # gets left, middle and right mouse presses
             pressed = pygame.mouse.get_pressed(3)
 
             # if the mouse if pressed and it is left being pressed then a new circle is created where the mouse is
