@@ -22,12 +22,9 @@ def get_length(circles):
 
     # goes through the indices of all the circles
     for i in range(len(circles)):
-        # checks for the final element
-        # loops back to the beginning if it is the last element
-        if i + 1 == len(circles):
-            length += get_distance(circles[i], circles[0])
-        else:
-            length += get_distance(circles[i], circles[i + 1])
+        j = (i + 1) % len(circles)
+
+        length += get_distance(circles[i], circles[j])
 
     return length
 
@@ -98,46 +95,8 @@ def optimal_order(circles):
     return list(optimal_circles)
 
 
-# runs optimally but cuts off after a certain number of run troughs produce the same answer
-def value_cutoff_optimal_order(circles):
-    value_cutoff = 1 * 10 ^ 6
-
-    # initialize optimal order and minimum length
-    optimal_circles = None
-    min_length = 0
-
-    # a running count of all the iterations that have occurred before a new optimum
-    running_count = 0
-
-    # loops through all possible combinations of the circles
-    for temp_circles in itertools.permutations(circles):
-
-        # gets the length of the order of circles
-        temp_length = get_length(temp_circles)
-
-        # increases running count
-        running_count += 1
-
-        # checks if this is the first or smallest length by far and assigns it accordingly
-        if temp_length < min_length or min_length == 0:
-            min_length = temp_length
-            optimal_circles = temp_circles
-
-            # resets running count if new optimum found
-            running_count = 0
-
-        # breaks the loop enough runs through have given the same answer
-        # zero is used to indicate that no cutoff is desired
-        if running_count == value_cutoff:
-            break
-
-    # reassigns the optimal order to circles
-    # converts to list for easier use
-    return list(optimal_circles)
-
-
 # clusters the circles and sorts each cluster before combining them together
-def cluster_order(circles, order_function, max_size=None):
+def cluster_order(circles, max_size):
     # defines the number of clusters for the clustering algorithm
     count = len(circles)
     const = 1
@@ -153,17 +112,19 @@ def cluster_order(circles, order_function, max_size=None):
     # gets the groupings of the circles as a list of integers with each integer representing a group
     labels = list(clustering.labels_)
 
-    # checks if the optimal order is being ran and if so if the cluster is too big then it does not run
-    if order_function is optimal_order:
-        if cluster_count > max_size:
-            return circles
+    # checks if the number of clusters is too big and returns the original array if so
+    if cluster_count > max_size or len(circles) > 4 * max_size:
+        return circles
 
-        for i in range(cluster_count):
-            if labels.count(i) > max_size:
-                return circles
+    # checks if any of clusters are too big and returns the original array if so
+    # the clusters can have two more items since the first and last elements are not permuted
+    for i in range(cluster_count):
+        if labels.count(i) > max_size + 2:
+            return circles
 
     # goes through all of the cluster values and groups each cluster into their own array
     # these array are then combined together into a larger array
+    # also assigns each circle a new colour based on its cluster
     clustered_array = []
     for i in range(cluster_count):
         temp_array = []
@@ -186,7 +147,7 @@ def cluster_order(circles, order_function, max_size=None):
         cluster_circles.append(Circle(cluster_center, 0, None))
 
     # uses the provided ordering function to order the circles representing the clusters
-    ordered_cluster_circles = order_function(cluster_circles)
+    ordered_cluster_circles = optimal_order(cluster_circles)
 
     # gets gets the ordered cluster circles and then adds the respective clusters to a new array
     # this is done in the order of the cluster circles so they are in the order function order
@@ -195,89 +156,66 @@ def cluster_order(circles, order_function, max_size=None):
         index = cluster_centers.index(cluster_circle.get_center())
         ordered_cluster_array.append(clustered_array[index])
 
+    # gets the closest endpoints between all of the clusters
+    endpoints = closest_endpoints(ordered_cluster_array)
+
+    # for each cluster the endpoints are moved to the outside of the cluster
+    # the left endpoint is moved to the first index
+    # the right endpoint is moved to the last index
+    for i in range(cluster_count):
+
+        # avoids clusters of length 1
+        if len(ordered_cluster_array[i]) > 1:
+            cluster = ordered_cluster_array[i]
+            first_circle = endpoints[i][0]
+            last_circle = endpoints[i][1]
+
+            cluster = to_front(cluster, first_circle)
+            cluster = to_back(cluster, last_circle)
+
+            ordered_cluster_array[i] = cluster
+
     # each cluster has its circles ordered and then reassigned to the cluster array
     for i in range(cluster_count):
-        ordered_cluster_array[i] = order_function(ordered_cluster_array[i])
+        ordered_cluster_array[i] = cluster_optimal_order(ordered_cluster_array[i])
 
-    # goes through the indices of all the circles
-    for i in range(cluster_count):
-        # checks for the final element
-        # loops back to the beginning if it is the last element
-        if i + 1 == cluster_count:
-            # find the closest circles possible between the two clusters
-            cluster1 = ordered_cluster_array[i]
-            cluster2 = ordered_cluster_array[0]
-            circle1, circle2 = closest_between_clusters(cluster1, cluster2)
-
-            # this checks if the circle that was found was on the outside of a previously worked on cluster
-            # this means that two clusters share the closest circle with another
-            # this finds which is shorter and then goes with that one
-            if cluster1.index(circle1) == 0 and len(cluster1) != 1:
-                cluster0 = ordered_cluster_array[i - 1]
-                circle0 = cluster0[-1]
-                old_distance = get_distance(circle0, circle1)
-                new_distance = get_distance(circle1, circle2)
-
-                # if the old distance is longer then the new new cluster needs to find a new closest circle
-                # vice versa if the new distance is longer
-                # since the closest circle was already at the beginning it is excluded
-                if new_distance < old_distance:
-                    new_circle0, new_circle1 = closest_between_clusters(cluster0, cluster1[1:])
-                    ordered_cluster_array[i - 1] = right_reverse_cluster(cluster0, new_circle0)
-                    ordered_cluster_array[i] = right_reverse_cluster(left_reverse_cluster(cluster1, new_circle1),
-                                                                     circle1)
-                    ordered_cluster_array[0] = left_reverse_cluster(cluster2, circle2)
-                else:
-                    new_circle1, new_circle2 = closest_between_clusters(cluster1[1:], cluster2)
-                    ordered_cluster_array[i] = right_reverse_cluster(cluster1, new_circle1)
-                    ordered_cluster_array[0] = left_reverse_cluster(cluster2, new_circle2)
-
-            # adds the reordered clusters back to the set if there was no issue
-            else:
-                ordered_cluster_array[i] = right_reverse_cluster(cluster1, circle1)
-                ordered_cluster_array[0] = left_reverse_cluster(cluster2, circle2)
-
-        else:
-            # find the closest circles possible between the two clusters
-            cluster1 = ordered_cluster_array[i]
-            cluster2 = ordered_cluster_array[i + 1]
-            circle1, circle2 = closest_between_clusters(cluster1, cluster2)
-
-            # this checks if the circle that was found was on the outside of a previously worked on cluster
-            # this means that two clusters share the closest circle with another
-            # this finds which is shorter and then goes with that one
-            if cluster1.index(circle1) == 0 and ordered_cluster_array.index(cluster1) != 0 and len(cluster1) != 1:
-                cluster0 = ordered_cluster_array[i - 1]
-                circle0 = cluster0[-1]
-                old_distance = get_distance(circle0, circle1)
-                new_distance = get_distance(circle1, circle2)
-
-                # if the old distance is longer then the new new cluster needs to find a new closest circle
-                # vice versa if the new distance is longer
-                # since the closest circle was already at the beginning it is excluded
-                if new_distance >= old_distance:
-                    new_circle1, new_circle2 = closest_between_clusters(cluster1[1:], cluster2)
-                    ordered_cluster_array[i] = right_reverse_cluster(cluster1, new_circle1)
-                    ordered_cluster_array[i + 1] = left_reverse_cluster(cluster2, new_circle2)
-
-                else:
-                    new_circle0, new_circle1 = closest_between_clusters(cluster0, cluster1[1:])
-                    ordered_cluster_array[i - 1] = right_reverse_cluster(cluster0, new_circle0)
-                    ordered_cluster_array[i] = right_reverse_cluster(left_reverse_cluster(cluster1, new_circle1),
-                                                                     circle1)
-                    ordered_cluster_array[i + 1] = left_reverse_cluster(cluster2, circle2)
-
-            # adds the reordered clusters back to the set if there was no issue
-            else:
-                ordered_cluster_array[i] = right_reverse_cluster(cluster1, circle1)
-                ordered_cluster_array[i + 1] = left_reverse_cluster(cluster2, circle2)
-
-    # add all of the circles of all the clusters to one array of just circles that is then returned
+    # adds all of the circles of all the clusters to one array of just circles that is then returned
     ord_circles = []
     for cluster in ordered_cluster_array:
         ord_circles.extend(cluster)
 
     return ord_circles
+
+
+# orders optimally for the clusters
+def cluster_optimal_order(circles):
+    # initialize optimal order and minimum length
+    optimal_circles = None
+    min_length = 0
+
+    # splits the array into the first, last and middle circles
+    first_circle = circles[0]
+    last_circle = circles[-1]
+    middle_circles = circles[1:-1]
+
+    # loops through all possible combinations of the middle circles
+    for temp_circles in itertools.permutations(middle_circles):
+
+        # adds the first and last circle here so they are always the same
+        temp_circles = list(temp_circles)
+        temp_circles.insert(0, first_circle)
+        temp_circles.append(last_circle)
+
+        # gets the length of the order of circles
+        temp_length = get_length(temp_circles)
+
+        # checks if this is the first or smallest length by far and assigns it accordingly
+        if temp_length < min_length or min_length == 0:
+            min_length = temp_length
+            optimal_circles = temp_circles
+
+    # converts to list for easier use
+    return list(optimal_circles)
 
 
 # gets the average center of all the circles in the set
@@ -301,39 +239,128 @@ def get_cluster_center(cluster):
     return cluster_center
 
 
-# gets the closest circles between two clusters
-def closest_between_clusters(cluster1, cluster2):
-    # initial variables
+# gets all the possible combinations of endpoints
+def get_endpoints(cluster):
+    endpoints = []
+
+    if len(cluster) > 1:
+        for i in range(0, len(cluster)):
+            for j in range(i + 1, len(cluster)):
+                # makes sure that both the forward and reverse combinations are gotten
+                endpoints.append([cluster[i], cluster[j]])
+                endpoints.append([cluster[j], cluster[i]])
+    else:
+        endpoints.append([cluster[0], cluster[0]])
+    return endpoints
+
+
+# find the shortest ordering of endpoints
+def closest_endpoints(cluster_array):
+    reduced_cluster_array = []
+
+    for i in range(len(cluster_array)):
+        j = (i + 1) % len(cluster_array)
+        k = (i - 1) % len(cluster_array)
+
+        # gets the nearest two clusters
+        cluster = cluster_array[i]
+        cluster_after = cluster_array[j]
+        cluster_before = cluster_array[k]
+
+        # gets the closest points from the cluster to the the nearest two clusters
+        reduced_cluster = []
+        reduced_cluster.extend(closest_two(cluster_before, cluster))
+        reduced_cluster.extend(closest_two(cluster_after, cluster))
+
+        # removes duplicates values from the cluster
+        reduced_cluster = list(dict.fromkeys(reduced_cluster))
+
+        reduced_cluster_array.append(reduced_cluster)
+
+    endpoints_array = []
+
+    # gets all the of possible ordering of endpoints for all clusters
+    for cluster in reduced_cluster_array:
+        endpoints = get_endpoints(cluster)
+        endpoints_array.append(endpoints)
+
+    # variables to store best performing ordering
+    min_length = 0
+    closest_ordering = None
+
+    # gets all the possible combinations of all the possible endpoints
+    for endpoints_ordering in itertools.product(*endpoints_array):
+        total_distance = 0
+
+        # gets all the distances between just the specified endpoints
+        for i in range(len(endpoints_ordering)):
+            j = (i + 1) % len(endpoints_ordering)
+
+            total_distance += get_distance(endpoints_ordering[i][1], endpoints_ordering[j][0])
+
+        # checks if this is the first or best result so far and saves it if it is
+        if total_distance < min_length or min_length == 0:
+            min_length = total_distance
+            closest_ordering = endpoints_ordering
+
+    return closest_ordering
+
+
+def closest_two(cluster1, cluster2):
+    # holds the number of closest circles to be found
     closest_circle_1 = None
     closest_circle_2 = None
-    min_length = 0
 
-    # goes through each cluster and calculates the distances between them
-    # it then saves and returns which two circles had the smallest distance
+    # holds the minimum distances found for each closest circle
+    min_length_1 = 0
+    min_length_2 = 0
+
+    # loops through all possible combinations of both sets
     for circle1 in cluster1:
         for circle2 in cluster2:
             temp_distance = get_distance(circle1, circle2)
 
-            if temp_distance < min_length or min_length == 0:
-                min_length = temp_distance
-                closest_circle_1 = circle1
+            if temp_distance < min_length_1 or min_length_1 == 0:
+
+                if closest_circle_1 == circle2:
+                    min_length_1 = temp_distance
+                    closest_circle_1 = circle2
+
+                else:
+                    min_length_2 = min_length_1
+                    closest_circle_2 = closest_circle_1
+
+                    min_length_1 = temp_distance
+                    closest_circle_1 = circle2
+
+            elif (temp_distance < min_length_2 or min_length_2 == 0) and closest_circle_1 != circle2:
+
+                min_length_2 = temp_distance
                 closest_circle_2 = circle2
 
     return closest_circle_1, closest_circle_2
 
 
-# gets the desired index and then reverses all of the elements from that element to the end of the list
-# results in the desired index being the final element of the array while preserving some of the structure
-def right_reverse_cluster(cluster, circle):
-    index = cluster.index(circle)
-    return cluster[:index] + cluster[index:][::-1]
+# moves an element to the front of a list
+def to_front(array, element):
+    length = len(array)
+
+    if length > 1:
+        array.remove(element)
+        array.insert(0, element)
+
+    return array
 
 
-# gets the desired index and then reverses all of the elements from the beginning up to and including the element
-# results in the desired index being the first element of the array while preserving some of the structure
-def left_reverse_cluster(cluster, circle):
-    index = cluster.index(circle) + 1
-    return cluster[:index][::-1] + cluster[index:]
+# moves an element to the back of a list
+def to_back(array, element):
+    length = len(array)
+
+    if length > 1:
+        array.remove(element)
+        array.append(element)
+
+    return array
 
 
 # class that represents a whole set of circle objects
@@ -508,16 +535,11 @@ class CircleSet:
 
         # goes through the indices of all the circles
         for i in range(len(self.circles)):
-            # checks for the final element
-            # loops back to the beginning if it is the last element
-            if i + 1 == len(self.circles):
-                pygame.draw.line(
-                    self.surface, self.color,
-                    self.circles[i].get_center(), self.circles[0].get_center(), self.width)
-            else:
-                pygame.draw.line(
-                    self.surface, self.color,
-                    self.circles[i].get_center(), self.circles[i + 1].get_center(), self.width)
+            j = (i + 1) % len(self.circles)
+
+            pygame.draw.line(
+                self.surface, self.color,
+                self.circles[i].get_center(), self.circles[j].get_center(), self.width)
 
 
 # class which holds the properties of a circle
